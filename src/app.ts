@@ -5,6 +5,7 @@ import cors from "cors";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
 import authRoutes from "./modules/auth/auth.routes";
+import resumeRoutes from "./modules/resume/resume.routes";
 import { errorMiddleware } from "./middleware/error.middleware";
 
 const app = express();
@@ -20,6 +21,7 @@ app.get("/api/v1/health", (_req, res) => {
 });
 
 app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/resumes", resumeRoutes);
 
 app.use(errorMiddleware);
 
