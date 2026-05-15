@@ -2,38 +2,111 @@ import cloudinary from "../../config/cloudinary";
 import { ApiError } from "../../utils/ApiError";
 import Resume from "../resume/resume.model";
 
-// ─── HTML Builders ────────────────────────────────────────────────────────────
+// ─── Types (mirrors frontend types/index.ts) ──────────────────────────────────
 
-const GOOGLE_FONTS = `<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Merriweather:wght@400;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">`;
+interface PersonalInfo {
+  name?: string;
+  email?: string;
+  phone?: string;
+  location?: string;
+  linkedin?: string;
+  github?: string;
+  portfolio?: string;
+}
+
+interface Experience {
+  company?: string;
+  role?: string;
+  location?: string;
+  startDate?: string;
+  endDate?: string;
+  current?: boolean;
+  bullets?: string[];
+}
+
+interface Education {
+  institution?: string;
+  degree?: string;
+  gpa?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+interface SkillGroup {
+  category?: string;
+  items?: string[];
+}
+
+interface Project {
+  name?: string;
+  techStack?: string[];
+  link?: string;
+  liveLink?: string;
+  bullets?: string[];
+}
+
+interface Certification {
+  name?: string;
+  issuer?: string;
+  date?: string;
+  link?: string;
+}
+
+interface ResumeData {
+  personalInfo?: PersonalInfo;
+  summary?: string;
+  experience?: Experience[];
+  education?: Education[];
+  skills?: SkillGroup[];
+  projects?: Project[];
+  certifications?: Certification[];
+}
+
+// ─── Shared styles ────────────────────────────────────────────────────────────
 
 const PAGE_STYLE = `
   * { margin: 0; padding: 0; box-sizing: border-box; }
   @page { size: A4; margin: 0; }
-  html, body { width: 794px; height: 1123px; overflow: hidden; }
+  html, body { width: 794px; min-height: 1123px; overflow: hidden; }
 `;
 
-function section(title: string, content: string): string {
-  return content
-    ? `<div class="section"><h2 class="section-title">${title}</h2>${content}</div>`
-    : "";
+// ─── HTML Builders ────────────────────────────────────────────────────────────
+
+function bulletsHTML(bullets: string[] = []): string {
+  const items = bullets.filter(Boolean);
+  if (!items.length) return "";
+  return `<ul style="margin:5px 0 0 0;padding-left:16px">${items.map((b) => `<li style="font-size:11px;line-height:1.55;margin-bottom:2px;color:#444">${b}</li>`).join("")}</ul>`;
 }
 
-function buildModernHTML(data: Record<string, unknown>): string {
-  const p = (data.personalInfo as Record<string, string>) || {};
-  const exp = (data.experience as Record<string, string>[]) || [];
-  const edu = (data.education as Record<string, string>[]) || [];
-  const skills = (data.skills as string[]) || [];
-  const projects = (data.projects as Record<string, string>[]) || [];
-  const certs = (data.certifications as Record<string, string>[]) || [];
-  const summary = (data.summary as string) || "";
+function buildModernHTML(d: ResumeData): string {
+  const p = d.personalInfo || {};
+  const exp = d.experience || [];
+  const edu = d.education || [];
+  const skills = d.skills || [];
+  const projects = d.projects || [];
+  const certs = d.certifications || [];
+  const summary = d.summary || "";
+
+  const contact = [p.email, p.phone, p.location, p.linkedin, p.github, p.portfolio]
+    .filter(Boolean)
+    .map((v) => `<div style="font-size:9px;color:#a0a0c0;margin-bottom:4px;word-break:break-all">${v}</div>`)
+    .join("");
 
   const expHTML = exp
     .map(
       (e) => `
-    <div class="entry">
-      <div class="entry-header"><span class="entry-title">${e.title || ""}</span><span class="entry-date">${e.startDate || ""} – ${e.endDate || "Present"}</span></div>
-      <div class="entry-sub">${e.company || ""}${e.location ? `, ${e.location}` : ""}</div>
-      <p class="entry-desc">${e.description || ""}</p>
+    <div style="margin-bottom:14px;padding-left:10px;border-left:2px solid #6c63ff">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#1a1a2e">${e.role || ""}</div>
+          <div style="font-size:10px;font-weight:600;color:#6c63ff">${e.company || ""}</div>
+        </div>
+        <div style="text-align:right;font-size:9px;color:#888">
+          <div>${e.startDate || ""}${e.current ? " – Present" : e.endDate ? ` – ${e.endDate}` : ""}</div>
+          ${e.location ? `<div style="color:#aaa">${e.location}</div>` : ""}
+        </div>
+      </div>
+      ${bulletsHTML(e.bullets)}
     </div>`
     )
     .join("");
@@ -41,235 +114,252 @@ function buildModernHTML(data: Record<string, unknown>): string {
   const eduHTML = edu
     .map(
       (e) => `
-    <div class="entry">
-      <div class="entry-header"><span class="entry-title">${e.degree || ""}</span><span class="entry-date">${e.startDate || ""} – ${e.endDate || ""}</span></div>
-      <div class="entry-sub">${e.institution || ""}</div>
+    <div style="margin-bottom:10px;display:flex;justify-content:space-between">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#1a1a2e">${e.degree || ""}</div>
+        <div style="font-size:10px;color:#6c63ff">${e.institution || ""}</div>
+        ${e.gpa ? `<div style="font-size:9px;color:#888">GPA ${e.gpa}</div>` : ""}
+      </div>
+      <div style="font-size:9px;color:#888">${e.startDate || ""}${e.endDate ? ` – ${e.endDate}` : ""}</div>
     </div>`
     )
     .join("");
 
-  const skillsHTML = skills.map((s) => `<span class="skill-chip">${s}</span>`).join("");
-
-  const projectHTML = projects
+  const skillsHTML = skills
     .map(
-      (p) => `
-    <div class="entry">
-      <div class="entry-header"><span class="entry-title">${p.name || ""}</span>${p.url ? `<a class="entry-link" href="${p.url}">${p.url}</a>` : ""}</div>
-      <p class="entry-desc">${p.description || ""}</p>
+      (g) => `
+    <div style="margin-bottom:8px">
+      ${g.category ? `<div style="font-size:9px;font-weight:700;color:#6c63ff;margin-bottom:3px">${g.category}</div>` : ""}
+      <div style="display:flex;flex-wrap:wrap;gap:3px">
+        ${(g.items || []).map((s) => `<span style="font-size:8px;background:rgba(108,99,255,0.2);color:#e0e0f0;padding:2px 6px;border-radius:3px">${s}</span>`).join("")}
+      </div>
     </div>`
     )
     .join("");
 
-  const certHTML = certs.map((c) => `<div class="cert">${c.name || ""} — ${c.issuer || ""} ${c.year ? `(${c.year})` : ""}</div>`).join("");
+  const projHTML = projects
+    .map(
+      (pr) => `
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:#1a1a2e">${pr.name || ""}</div>
+      ${(pr.techStack || []).length ? `<div style="display:flex;flex-wrap:wrap;gap:3px;margin:3px 0">${(pr.techStack || []).map((t) => `<span style="font-size:8px;background:#f0efff;color:#6c63ff;padding:1px 5px;border-radius:3px">${t}</span>`).join("")}</div>` : ""}
+      ${bulletsHTML(pr.bullets)}
+    </div>`
+    )
+    .join("");
 
-  return `<!DOCTYPE html>
-<html><head><meta charset="UTF-8">${GOOGLE_FONTS}<style>
-${PAGE_STYLE}
-body { font-family: 'Inter', sans-serif; color: #1a1a2e; background: white; display: flex; flex-direction: column; }
-.header { background: #16213e; color: white; padding: 36px 48px; }
-.name { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; }
-.tagline { font-size: 14px; color: #a8b2d8; margin-top: 4px; }
-.contact { display: flex; gap: 20px; margin-top: 12px; font-size: 12px; color: #a8b2d8; }
-.body { display: flex; flex: 1; }
-.sidebar { width: 220px; background: #0f3460; color: white; padding: 28px 24px; flex-shrink: 0; }
-.main { flex: 1; padding: 28px 36px; }
-.section { margin-bottom: 20px; }
-.section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #e94560; border-bottom: 2px solid #e94560; padding-bottom: 4px; margin-bottom: 12px; }
-.sidebar .section-title { color: #a8b2d8; border-color: #a8b2d8; }
-.entry { margin-bottom: 12px; }
-.entry-header { display: flex; justify-content: space-between; align-items: baseline; }
-.entry-title { font-size: 13px; font-weight: 600; }
-.entry-date { font-size: 11px; color: #888; }
-.entry-sub { font-size: 12px; color: #555; margin: 2px 0; }
-.entry-desc { font-size: 12px; color: #444; line-height: 1.5; margin-top: 4px; }
-.entry-link { font-size: 11px; color: #e94560; text-decoration: none; }
-.skill-chip { display: inline-block; background: #1a3a5c; color: #a8d8ea; font-size: 11px; padding: 3px 10px; border-radius: 12px; margin: 3px 3px 3px 0; }
-.summary { font-size: 12px; line-height: 1.6; color: #333; }
-.cert { font-size: 12px; margin-bottom: 6px; color: #ccc; }
+  const certHTML = certs
+    .map(
+      (c) => `
+    <div style="margin-bottom:7px">
+      <div style="font-size:9px;font-weight:600;color:#fff">${c.name || ""}</div>
+      <div style="font-size:8px;color:#a0a0c0">${c.issuer || ""}${c.date ? ` · ${c.date}` : ""}</div>
+    </div>`
+    )
+    .join("");
+
+  function sideSection(title: string, body: string) {
+    if (!body.trim()) return "";
+    return `
+      <div style="margin-bottom:22px">
+        <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:#6c63ff;text-transform:uppercase;border-bottom:1px solid #6c63ff;padding-bottom:3px;margin-bottom:8px">${title}</div>
+        ${body}
+      </div>`;
+  }
+
+  function mainSection(title: string, body: string) {
+    if (!body.trim()) return "";
+    return `
+      <div style="margin-bottom:20px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:#6c63ff;text-transform:uppercase;border-bottom:2px solid #6c63ff;padding-bottom:3px;margin-bottom:10px">${title}</div>
+        ${body}
+      </div>`;
+  }
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${PAGE_STYLE}
+body { font-family: Arial, sans-serif; display: flex; width: 794px; min-height: 1123px; }
 </style></head><body>
-<div class="header">
-  <div class="name">${p.fullName || "Your Name"}</div>
-  <div class="tagline">${p.title || ""}</div>
-  <div class="contact">
-    ${p.email ? `<span>${p.email}</span>` : ""}
-    ${p.phone ? `<span>${p.phone}</span>` : ""}
-    ${p.location ? `<span>${p.location}</span>` : ""}
-    ${p.linkedin ? `<span>${p.linkedin}</span>` : ""}
-    ${p.github ? `<span>${p.github}</span>` : ""}
+<div style="width:30%;background:#1a1a2e;color:#e0e0f0;padding:36px 18px;box-sizing:border-box;flex-shrink:0">
+  <div style="margin-bottom:28px">
+    <h1 style="font-size:20px;font-weight:700;color:#fff;line-height:1.2">${p.name || "Your Name"}</h1>
+    <div style="width:36px;height:3px;background:#6c63ff;margin-top:6px"></div>
   </div>
+  ${sideSection("Contact", contact)}
+  ${sideSection("Skills", skillsHTML)}
+  ${sideSection("Certifications", certHTML)}
 </div>
-<div class="body">
-  <div class="sidebar">
-    ${section("Skills", `<div>${skillsHTML}</div>`)}
-    ${section("Certifications", certHTML)}
-  </div>
-  <div class="main">
-    ${summary ? section("Summary", `<p class="summary">${summary}</p>`) : ""}
-    ${section("Experience", expHTML)}
-    ${section("Education", eduHTML)}
-    ${section("Projects", projectHTML)}
-  </div>
+<div style="flex:1;padding:36px 28px;background:#fff;box-sizing:border-box">
+  ${summary ? mainSection("Professional Summary", `<p style="font-size:10px;color:#444;line-height:1.65">${summary}</p>`) : ""}
+  ${mainSection("Experience", expHTML)}
+  ${mainSection("Education", eduHTML)}
+  ${mainSection("Projects", projHTML)}
 </div>
 </body></html>`;
 }
 
-function buildClassicHTML(data: Record<string, unknown>): string {
-  const p = (data.personalInfo as Record<string, string>) || {};
-  const exp = (data.experience as Record<string, string>[]) || [];
-  const edu = (data.education as Record<string, string>[]) || [];
-  const skills = (data.skills as string[]) || [];
-  const projects = (data.projects as Record<string, string>[]) || [];
-  const certs = (data.certifications as Record<string, string>[]) || [];
-  const summary = (data.summary as string) || "";
+function buildClassicHTML(d: ResumeData): string {
+  const p = d.personalInfo || {};
+  const exp = d.experience || [];
+  const edu = d.education || [];
+  const skills = d.skills || [];
+  const projects = d.projects || [];
+  const certs = d.certifications || [];
+  const summary = d.summary || "";
 
-  const expHTML = exp
-    .map(
-      (e) => `
-    <div class="entry">
-      <div class="entry-header"><span class="entry-title">${e.title || ""}, ${e.company || ""}</span><span class="entry-date">${e.startDate || ""} – ${e.endDate || "Present"}</span></div>
-      <p class="entry-desc">${e.description || ""}</p>
+  const contactLine = [p.email, p.phone, p.location, p.linkedin, p.github]
+    .filter(Boolean)
+    .join(" · ");
+
+  function sec(title: string, body: string) {
+    if (!body.trim()) return "";
+    return `<div style="margin-bottom:16px"><div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#111;border-bottom:1.5px solid #111;padding-bottom:3px;margin-bottom:8px">${title}</div>${body}</div>`;
+  }
+
+  const expHTML = exp.map((e) => `
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <div>
+          <span style="font-size:12px;font-weight:700;color:#111">${e.role || ""}</span>
+          ${e.company ? `<span style="font-size:11px;color:#444">, ${e.company}</span>` : ""}
+          ${e.location ? `<span style="font-size:10px;color:#777"> — ${e.location}</span>` : ""}
+        </div>
+        <span style="font-size:10px;color:#666;white-space:nowrap">${e.startDate || ""}${e.current ? "–Present" : e.endDate ? `–${e.endDate}` : ""}</span>
+      </div>
+      ${bulletsHTML(e.bullets)}
+    </div>`).join("");
+
+  const eduHTML = edu.map((e) => `
+    <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+      <div>
+        <span style="font-size:12px;font-weight:700">${e.degree || ""}</span>
+        ${e.institution ? `<span style="font-size:11px;color:#555">, ${e.institution}</span>` : ""}
+        ${e.gpa ? `<span style="font-size:10px;color:#777"> · GPA ${e.gpa}</span>` : ""}
+      </div>
+      <span style="font-size:10px;color:#666">${e.startDate || ""}${e.endDate ? `–${e.endDate}` : ""}</span>
+    </div>`).join("");
+
+  const skillsHTML = skills.map((g) =>
+    `<div style="margin-bottom:5px;display:flex;gap:8px">
+      ${g.category ? `<span style="font-size:10px;font-weight:700;min-width:70px">${g.category}:</span>` : ""}
+      <span style="font-size:10px;color:#444">${(g.items || []).join(", ")}</span>
     </div>`
-    )
-    .join("");
+  ).join("");
 
-  const eduHTML = edu
-    .map(
-      (e) => `
-    <div class="entry">
-      <div class="entry-header"><span class="entry-title">${e.degree || ""}, ${e.institution || ""}</span><span class="entry-date">${e.endDate || ""}</span></div>
+  const projHTML = projects.map((pr) => `
+    <div style="margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700">${pr.name || ""}${(pr.techStack || []).length ? ` <span style="font-size:9px;font-weight:400;color:#666;font-style:italic">(${(pr.techStack || []).join(", ")})</span>` : ""}</div>
+      ${bulletsHTML(pr.bullets)}
+    </div>`).join("");
+
+  const certHTML = certs.map((c) =>
+    `<div style="margin-bottom:5px;display:flex;justify-content:space-between">
+      <span style="font-size:10px"><strong>${c.name || ""}</strong>${c.issuer ? ` · ${c.issuer}` : ""}</span>
+      ${c.date ? `<span style="font-size:9px;color:#666">${c.date}</span>` : ""}
     </div>`
-    )
-    .join("");
+  ).join("");
 
-  const projectHTML = projects
-    .map(
-      (p) => `
-    <div class="entry">
-      <div class="entry-header"><span class="entry-title">${p.name || ""}</span></div>
-      <p class="entry-desc">${p.description || ""}</p>
-    </div>`
-    )
-    .join("");
-
-  const certHTML = certs.map((c) => `<div class="entry"><span class="entry-title">${c.name || ""}</span> — ${c.issuer || ""}</div>`).join("");
-
-  return `<!DOCTYPE html>
-<html><head><meta charset="UTF-8">${GOOGLE_FONTS}<style>
-${PAGE_STYLE}
-body { font-family: 'Merriweather', serif; color: #2c2c2c; background: white; padding: 60px 72px; }
-.name { font-size: 28px; font-weight: 700; text-align: center; letter-spacing: 2px; text-transform: uppercase; }
-.tagline { text-align: center; font-size: 13px; color: #666; margin-top: 4px; font-family: 'Inter', sans-serif; }
-.contact { display: flex; justify-content: center; gap: 16px; margin-top: 8px; font-size: 11px; color: #555; font-family: 'Inter', sans-serif; }
-.divider { border: none; border-top: 2px solid #2c2c2c; margin: 16px 0; }
-.thin-divider { border: none; border-top: 1px solid #ccc; margin: 12px 0; }
-.section { margin-bottom: 18px; }
-.section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }
-.entry { margin-bottom: 10px; }
-.entry-header { display: flex; justify-content: space-between; }
-.entry-title { font-size: 13px; font-weight: 700; font-family: 'Inter', sans-serif; }
-.entry-date { font-size: 11px; color: #666; font-family: 'Inter', sans-serif; }
-.entry-desc { font-size: 12px; line-height: 1.6; color: #444; margin-top: 4px; font-family: 'Inter', sans-serif; }
-.skills-list { font-size: 12px; font-family: 'Inter', sans-serif; color: #333; line-height: 1.8; }
-.summary { font-size: 12px; line-height: 1.7; color: #444; font-family: 'Inter', sans-serif; }
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${PAGE_STYLE}
+body { font-family: Georgia, serif; color: #222; background: white; padding: 52px 60px; box-sizing: border-box; }
 </style></head><body>
-<div class="name">${p.fullName || "Your Name"}</div>
-<div class="tagline">${p.title || ""}</div>
-<div class="contact">
-  ${p.email ? `<span>${p.email}</span>` : ""}
-  ${p.phone ? `<span>${p.phone}</span>` : ""}
-  ${p.location ? `<span>${p.location}</span>` : ""}
-  ${p.linkedin ? `<span>${p.linkedin}</span>` : ""}
+<div style="text-align:center;margin-bottom:20px;border-bottom:1px solid #ccc;padding-bottom:14px">
+  <h1 style="font-size:26px;font-weight:700;letter-spacing:1px;color:#111">${p.name || "Your Name"}</h1>
+  ${contactLine ? `<div style="font-size:9.5px;color:#555;margin-top:8px;letter-spacing:0.3px">${contactLine}</div>` : ""}
 </div>
-<hr class="divider"/>
-${summary ? `<div class="section"><div class="section-title">Professional Summary</div><p class="summary">${summary}</p></div><hr class="thin-divider"/>` : ""}
-${exp.length ? `<div class="section"><div class="section-title">Experience</div>${expHTML}</div><hr class="thin-divider"/>` : ""}
-${edu.length ? `<div class="section"><div class="section-title">Education</div>${eduHTML}</div><hr class="thin-divider"/>` : ""}
-${skills.length ? `<div class="section"><div class="section-title">Skills</div><div class="skills-list">${skills.join(" · ")}</div></div><hr class="thin-divider"/>` : ""}
-${projects.length ? `<div class="section"><div class="section-title">Projects</div>${projectHTML}</div><hr class="thin-divider"/>` : ""}
-${certs.length ? `<div class="section"><div class="section-title">Certifications</div>${certHTML}</div>` : ""}
+${summary ? sec("Summary", `<p style="font-size:10.5px;line-height:1.7;color:#333">${summary}</p>`) : ""}
+${sec("Experience", expHTML)}
+${sec("Education", eduHTML)}
+${sec("Skills", skillsHTML)}
+${sec("Projects", projHTML)}
+${sec("Certifications", certHTML)}
 </body></html>`;
 }
 
-function buildMinimalHTML(data: Record<string, unknown>): string {
-  const p = (data.personalInfo as Record<string, string>) || {};
-  const exp = (data.experience as Record<string, string>[]) || [];
-  const edu = (data.education as Record<string, string>[]) || [];
-  const skills = (data.skills as string[]) || [];
-  const projects = (data.projects as Record<string, string>[]) || [];
-  const certs = (data.certifications as Record<string, string>[]) || [];
-  const summary = (data.summary as string) || "";
+function buildMinimalHTML(d: ResumeData): string {
+  const p = d.personalInfo || {};
+  const exp = d.experience || [];
+  const edu = d.education || [];
+  const skills = d.skills || [];
+  const projects = d.projects || [];
+  const certs = d.certifications || [];
+  const summary = d.summary || "";
 
-  const expHTML = exp
-    .map(
-      (e) => `
-    <div class="entry">
-      <div class="entry-header"><span class="entry-title">${e.title || ""}</span><span class="entry-date">${e.startDate || ""} – ${e.endDate || "Present"}</span></div>
-      <div class="entry-sub">${e.company || ""}${e.location ? ` · ${e.location}` : ""}</div>
-      <p class="entry-desc">${e.description || ""}</p>
-    </div>`
-    )
+  function leftSec(title: string, body: string) {
+    if (!body.trim()) return "";
+    return `<div style="margin-bottom:18px"><div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#333;border-bottom:1px solid #ddd;padding-bottom:2px;margin-bottom:7px">${title}</div>${body}</div>`;
+  }
+
+  function rightSec(title: string, body: string) {
+    if (!body.trim()) return "";
+    return `<div style="margin-bottom:18px"><div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#333;border-bottom:1px solid #ddd;padding-bottom:2px;margin-bottom:7px">${title}</div>${body}</div>`;
+  }
+
+  const contactHTML = [p.email, p.phone, p.location, p.linkedin, p.github, p.portfolio]
+    .filter(Boolean)
+    .map((v) => `<div style="font-size:9px;color:#555;margin-bottom:3px;word-break:break-all">${v}</div>`)
     .join("");
 
-  const eduHTML = edu
-    .map(
-      (e) => `
-    <div class="entry">
-      <div class="entry-header"><span class="entry-title">${e.degree || ""}</span><span class="entry-date">${e.endDate || ""}</span></div>
-      <div class="entry-sub">${e.institution || ""}</div>
-    </div>`
-    )
-    .join("");
+  const skillsHTML = skills.map((g) => `
+    <div style="margin-bottom:7px">
+      ${g.category ? `<div style="font-size:9px;font-weight:600;color:#333;margin-bottom:2px">${g.category}</div>` : ""}
+      <div style="font-size:8.5px;color:#555;line-height:1.5">${(g.items || []).join(", ")}</div>
+    </div>`).join("");
 
-  const projectHTML = projects
-    .map(
-      (p) => `
-    <div class="entry">
-      <div class="entry-header"><span class="entry-title">${p.name || ""}</span>${p.url ? `<a class="entry-link" href="${p.url}">${p.url}</a>` : ""}</div>
-      <p class="entry-desc">${p.description || ""}</p>
-    </div>`
-    )
-    .join("");
+  const eduHTML = edu.map((e) => `
+    <div style="margin-bottom:9px">
+      <div style="font-size:10px;font-weight:600;color:#111">${e.degree || ""}</div>
+      <div style="font-size:9px;color:#555">${e.institution || ""}</div>
+      <div style="font-size:8.5px;color:#888">${e.startDate || ""}${e.endDate ? `–${e.endDate}` : ""}${e.gpa ? ` · GPA ${e.gpa}` : ""}</div>
+    </div>`).join("");
 
-  const certHTML = certs.map((c) => `<div class="entry-sub" style="margin-bottom:4px">${c.name || ""} — ${c.issuer || ""}</div>`).join("");
+  const certHTML = certs.map((c) => `
+    <div style="margin-bottom:7px">
+      <div style="font-size:9px;font-weight:600">${c.name || ""}</div>
+      <div style="font-size:8.5px;color:#666">${c.issuer || ""}${c.date ? ` · ${c.date}` : ""}</div>
+    </div>`).join("");
 
-  return `<!DOCTYPE html>
-<html><head><meta charset="UTF-8">${GOOGLE_FONTS}<style>
-${PAGE_STYLE}
-body { font-family: 'Roboto', sans-serif; color: #222; background: white; padding: 48px 56px; }
-.name { font-size: 30px; font-weight: 700; color: #111; }
-.title-line { font-size: 14px; color: #555; margin-top: 2px; }
-.contact { display: flex; gap: 16px; margin-top: 8px; font-size: 11px; color: #666; flex-wrap: wrap; }
-.contact a { color: #4a90d9; text-decoration: none; }
-.divider { border: none; border-top: 1px solid #e0e0e0; margin: 14px 0; }
-.section { margin-bottom: 16px; }
-.section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: #4a90d9; margin-bottom: 8px; }
-.entry { margin-bottom: 10px; }
-.entry-header { display: flex; justify-content: space-between; align-items: baseline; }
-.entry-title { font-size: 13px; font-weight: 500; color: #111; }
-.entry-date { font-size: 11px; color: #888; }
-.entry-sub { font-size: 12px; color: #666; margin: 2px 0; }
-.entry-desc { font-size: 12px; line-height: 1.6; color: #444; margin-top: 3px; }
-.entry-link { font-size: 11px; color: #4a90d9; text-decoration: none; }
-.skills { display: flex; flex-wrap: wrap; gap: 6px; }
-.skill { font-size: 11px; padding: 3px 10px; border: 1px solid #ddd; border-radius: 4px; color: #333; }
-.summary { font-size: 12px; line-height: 1.7; color: #444; }
+  const expHTML = exp.map((e) => `
+    <div style="margin-bottom:13px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <div>
+          <span style="font-size:11px;font-weight:600;color:#111">${e.role || ""}</span>
+          ${e.company ? `<span style="font-size:10px;color:#555"> · ${e.company}</span>` : ""}
+        </div>
+        <span style="font-size:8.5px;color:#888;white-space:nowrap">${e.startDate || ""}${e.current ? "–Present" : e.endDate ? `–${e.endDate}` : ""}</span>
+      </div>
+      ${e.location ? `<div style="font-size:8.5px;color:#999;margin-bottom:3px">${e.location}</div>` : ""}
+      ${bulletsHTML(e.bullets)}
+    </div>`).join("");
+
+  const projHTML = projects.map((pr) => `
+    <div style="margin-bottom:11px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <span style="font-size:11px;font-weight:600;color:#111">${pr.name || ""}</span>
+        ${pr.link ? `<span style="font-size:8px;color:#888">${pr.link}</span>` : ""}
+      </div>
+      ${(pr.techStack || []).length ? `<div style="font-size:8.5px;color:#666;margin-bottom:2px">${(pr.techStack || []).join(" · ")}</div>` : ""}
+      ${bulletsHTML(pr.bullets)}
+    </div>`).join("");
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${PAGE_STYLE}
+body { font-family: Arial, sans-serif; color: #222; background: white; padding: 40px 44px; box-sizing: border-box; }
 </style></head><body>
-<div class="name">${p.fullName || "Your Name"}</div>
-<div class="title-line">${p.title || ""}</div>
-<div class="contact">
-  ${p.email ? `<span>${p.email}</span>` : ""}
-  ${p.phone ? `<span>${p.phone}</span>` : ""}
-  ${p.location ? `<span>${p.location}</span>` : ""}
-  ${p.linkedin ? `<a href="${p.linkedin}">${p.linkedin}</a>` : ""}
-  ${p.github ? `<a href="${p.github}">${p.github}</a>` : ""}
+<div style="margin-bottom:20px">
+  <h1 style="font-size:22px;font-weight:700;color:#111;letter-spacing:-0.3px">${p.name || "Your Name"}</h1>
+  <div style="height:2px;width:44px;background:#333;margin:5px 0 10px 0"></div>
 </div>
-<hr class="divider"/>
-${summary ? `<div class="section"><div class="section-title">Summary</div><p class="summary">${summary}</p></div><hr class="divider"/>` : ""}
-${exp.length ? `<div class="section"><div class="section-title">Experience</div>${expHTML}</div><hr class="divider"/>` : ""}
-${edu.length ? `<div class="section"><div class="section-title">Education</div>${eduHTML}</div><hr class="divider"/>` : ""}
-${skills.length ? `<div class="section"><div class="section-title">Skills</div><div class="skills">${skills.map((s) => `<span class="skill">${s}</span>`).join("")}</div></div><hr class="divider"/>` : ""}
-${projects.length ? `<div class="section"><div class="section-title">Projects</div>${projectHTML}</div><hr class="divider"/>` : ""}
-${certs.length ? `<div class="section"><div class="section-title">Certifications</div>${certHTML}</div>` : ""}
+<div style="display:flex;gap:28px">
+  <div style="width:35%;flex-shrink:0">
+    ${leftSec("Contact", contactHTML)}
+    ${leftSec("Skills", skillsHTML)}
+    ${leftSec("Education", eduHTML)}
+    ${leftSec("Certifications", certHTML)}
+  </div>
+  <div style="flex:1">
+    ${summary ? rightSec("Summary", `<p style="font-size:10px;line-height:1.65;color:#444">${summary}</p>`) : ""}
+    ${rightSec("Experience", expHTML)}
+    ${rightSec("Projects", projHTML)}
+  </div>
+</div>
 </body></html>`;
 }
 
@@ -281,7 +371,7 @@ export const exportService = {
     if (!resume) throw new ApiError(404, "Resume not found");
     if (resume.userId.toString() !== userId) throw new ApiError(403, "Unauthorized");
 
-    const data = resume.data as unknown as Record<string, unknown>;
+    const data = resume.data as unknown as ResumeData;
 
     let html: string;
     if (resume.templateId === "modern") html = buildModernHTML(data);
@@ -289,34 +379,55 @@ export const exportService = {
     else html = buildMinimalHTML(data);
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const chromium = require("@sparticuz/chromium");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const puppeteer = require("puppeteer-core");
 
+    let executablePath: string;
+    let launchArgs: string[];
+
+    if (process.env.NODE_ENV === "production") {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const chromium = require("@sparticuz/chromium");
+      executablePath = await chromium.executablePath();
+      launchArgs = chromium.args;
+    } else {
+      executablePath =
+        process.env.CHROME_PATH ||
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+      launchArgs = ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"];
+    }
+
     const browser = await puppeteer.launch({
-      args: chromium.args,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
+      args: launchArgs,
+      executablePath,
+      headless: true,
     });
 
     let pdfBuffer: Buffer;
     try {
       const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: "networkidle0" });
-      pdfBuffer = await page.pdf({
+      await page.setContent(html, { waitUntil: "load" });
+      // puppeteer-core v21+ returns Uint8Array — must convert to Buffer for Cloudinary stream
+      const raw = await page.pdf({
         format: "A4",
         printBackground: true,
         margin: { top: 0, right: 0, bottom: 0, left: 0 },
       });
+      pdfBuffer = Buffer.from(raw);
     } finally {
       await browser.close();
     }
 
-    const filename = `${resume.title}.pdf`;
+    const safeTitle = resume.title.replace(/[^a-zA-Z0-9-_]/g, "_");
+    const filename = `${safeTitle}-${Date.now()}`;
 
     const uploadResult = await new Promise<{ secure_url: string }>((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        { resource_type: "raw", folder: "resume-builder/pdfs", public_id: filename },
+        {
+          resource_type: "raw",
+          folder: "resume-builder/pdfs",
+          public_id: filename,
+          format: "pdf",
+        },
         (err, result) => {
           if (err || !result) return reject(err ?? new Error("Cloudinary upload failed"));
           resolve(result as { secure_url: string });
@@ -325,6 +436,6 @@ export const exportService = {
       stream.end(pdfBuffer);
     });
 
-    return { downloadUrl: uploadResult.secure_url, filename };
+    return { downloadUrl: uploadResult.secure_url, filename: `${filename}.pdf` };
   },
 };
