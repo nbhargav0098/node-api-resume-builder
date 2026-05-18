@@ -1,12 +1,14 @@
 import { model } from "../../config/gemini";
 import { ApiError } from "../../utils/ApiError";
+import { logger } from "../../middleware/logger.middleware";
 
 const callGemini = async (prompt: string): Promise<unknown> => {
   try {
     const result = await model.generateContent(prompt);
     const text = result.response.text().replace(/```json|```/g, "").trim();
     return JSON.parse(text);
-  } catch {
+  } catch (err) {
+    logger.error("Gemini API error", { message: err instanceof Error ? err.message : String(err) });
     throw new ApiError(503, "AI service unavailable");
   }
 };
